@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcups2 libdbus-1-3 libdrm2 libgbm1 libgtk-3-0 libnspr4 libnss3 \
     libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 \
     libxrandr2 xdg-utils libu2f-udev libvulkan1 \
+    fonts-unifont \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -31,3 +32,4 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 CMD ["/app/docker-entrypoint.sh"]
+
