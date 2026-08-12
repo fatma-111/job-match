@@ -35,6 +35,10 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8000 8501
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+# Strip Windows line endings unconditionally — a CRLF-saved shebang line
+# ("#!/usr/bin/env bash\r") causes Linux's exec() to fail with
+# "exec format error", regardless of the chmod below. Sanitising here means
+# the build works no matter how the file was edited/saved on your machine.
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 CMD ["/app/docker-entrypoint.sh"]
