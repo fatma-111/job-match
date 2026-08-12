@@ -1,48 +1,40 @@
-#!/usr/bin/env bash
-# Runs the FastAPI backend and the Streamlit frontend in one container.
-# Streamlit is the public-facing process (Railway/Render only expose $PORT)
-# and MUST bind that port immediately so the platform healthcheck passes —
-# it talks to the backend over localhost and degrades gracefully in the UI
-# if the backend isn't ready yet, so we never gate Streamlit's startup on it.
-set -euo pipefail
+# Official Playwright image: ships Chromium/Firefox/WebKit and every OS-level
+# dependency already installed and version-matched — avoids the apt/OS
+# compatibility failures that "python:3.12-slim + playwright install --with-deps"
+# hits on newer Debian base images Playwright hasn't added support for yet.
+FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
 
-BACKEND_PORT="${PORT_BACKEND:-8000}"
-FRONTEND_PORT="${PORT:-8501}"
+# The base image ships Python 3.12 already; curl is needed by the entrypoint's
+# backend-health check loop.
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Railway/Render assign $PORT dynamically for the public-facing process.
-# If it happens to collide with the backend's port, bump the backend instead
-# of letting two processes fight over the same bind.
-if [ "${BACKEND_PORT}" = "${FRONTEND_PORT}" ]; then
-  BACKEND_PORT=$((FRONTEND_PORT + 1))
-  echo "PORT collision detected — moving backend to :${BACKEND_PORT}"
-fi
+WORKDIR /app
 
-export BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-echo "Starting FastAPI backend on :${BACKEND_PORT}"
-uvicorn app.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" &
-BACKEND_PID=$!
+# Chromium is already in the base image for this exact Playwright version;
+# this is just a safety net in case the pinned pip version drifts.
+RUN python -m playwright install chromium
 
-echo "Starting Streamlit frontend on :${FRONTEND_PORT} (binds immediately for the platform healthcheck)"
-streamlit run streamlit_app.py \
-  --server.port "${FRONTEND_PORT}" \
-  --server.address 0.0.0.0 \
-  --server.headless true \
-  --browser.gatherUsageStats false &
-FRONTEND_PID=$!
+COPY . .
+RUN mkdir -p data
 
-# Log backend readiness in the background purely for visibility — this must
-# never block Streamlit's port from being bound.
-(
-  for _ in $(seq 1 90); do
-    if curl -sf "http://127.0.0.1:${BACKEND_PORT}/health" > /dev/null 2>&1; then
-      echo "Backend is healthy."
-      exit 0
-    fi
-    sleep 2
-  done
-  echo "Backend still not healthy after 3 minutes — check 'railway logs' for the real error."
-) &
+# Bake the embedding model into the image at build time (not on the request
+# path) so the first search after a deploy doesn't stall on a download.
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" || \
+    echo "WARNING: could not pre-download embedding model at build time — it will download on first use instead."
 
-# If either main process dies, bring the container down so the platform restarts it.
-wait -n "$BACKEND_PID" "$FRONTEND_PID"
+ENV PYTHONUNBUFFERED=1 \
+    BACKEND_URL=http://localhost:8000 \
+    PORT=8000 \
+    STREAMLIT_PORT=8501
+
+EXPOSE 8000 8501
+
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+CMD ["/app/docker-entrypoint.sh"]
