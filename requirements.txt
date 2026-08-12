@@ -23,7 +23,7 @@ langgraph>=0.2,<0.3
 langchain-core>=0.2,<0.3
 
 # --- Scraping ---
-playwright>=1.45,<1.50
+playwright==1.47.0  # must match the mcr.microsoft.com/playwright/python image tag in Dockerfile
 
 # --- Embeddings ---
 numpy>=1.26,<2.0
