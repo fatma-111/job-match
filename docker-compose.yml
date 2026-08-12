@@ -1,0 +1,15 @@
+# Local development / self-hosting. For Railway/Render, use the Dockerfile directly.
+services:
+  job-agent:
+    build: .
+    ports:
+      - "8000:8000"   # FastAPI (docs at /docs)
+      - "8501:8501"   # Streamlit UI
+    env_file:
+      - .env
+    environment:
+      - PORT_BACKEND=8000
+      - PORT=8501
+    volumes:
+      - ./data:/app/data   # persist the SQLite database across restarts
+    restart: unless-stopped

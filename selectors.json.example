@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy to selectors.json and edit if a scraper stops finding job cards. Each key is a CSS selector list tried in order — put your fix first.",
+  "wuzzuf": {
+    "card": ["div.your-updated-card-class"]
+  }
+}

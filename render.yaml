@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: job-matching-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard   # needs >512MB RAM for Chromium + embeddings; free tier will OOM
+    healthCheckPath: /
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SCHEDULER_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        value: "sqlite:///./data/job_agent.db"
+    disk:
+      name: job-agent-data
+      mountPath: /app/data
+      sizeGB: 1
