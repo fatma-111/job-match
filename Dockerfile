@@ -1,12 +1,12 @@
-FROM python:3.12-slim
+# Official Playwright image: ships Chromium/Firefox/WebKit and every OS-level
+# dependency already installed and version-matched — avoids the apt/OS
+# compatibility failures that "python:3.12-slim + playwright install --with-deps"
+# hits on newer Debian base images Playwright hasn't added support for yet.
+FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
 
-# System deps for Playwright/Chromium + build tools for a couple of wheels.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget gnupg ca-certificates curl \
-    fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 \
-    libcups2 libdbus-1-3 libdrm2 libgbm1 libgtk-3-0 libnspr4 libnss3 \
-    libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 \
-    libxrandr2 xdg-utils libu2f-udev libvulkan1 \
+# The base image ships Python 3.12 already; curl is needed by the entrypoint's
+# backend-health check loop.
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,11 +14,18 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install only the Chromium browser (not the full Playwright test suite).
-RUN python -m playwright install --with-deps chromium
+# Chromium is already in the base image for this exact Playwright version;
+# this is just a safety net in case the pinned pip version drifts.
+RUN python -m playwright install chromium
 
 COPY . .
 RUN mkdir -p data
+
+# Bake the embedding model into the image at build time (not on the request
+# path) so the first search after a deploy doesn't stall on a download.
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" || \
+    echo "WARNING: could not pre-download embedding model at build time — it will download on first use instead."
 
 ENV PYTHONUNBUFFERED=1 \
     BACKEND_URL=http://localhost:8000 \
