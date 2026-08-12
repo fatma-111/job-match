@@ -4,11 +4,6 @@
 # hits on newer Debian base images Playwright hasn't added support for yet.
 FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
 
-# The base image ships Python 3.12 already; curl is needed by the entrypoint's
-# backend-health check loop.
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY requirements.txt .
@@ -34,11 +29,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8000 8501
 
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-# Strip Windows line endings unconditionally — a CRLF-saved shebang line
-# ("#!/usr/bin/env bash\r") causes Linux's exec() to fail with
-# "exec format error", regardless of the chmod below. Sanitising here means
-# the build works no matter how the file was edited/saved on your machine.
-RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
-
-CMD ["/app/docker-entrypoint.sh"]
+# Python entrypoint on purpose (not a shell script): `python entrypoint.py`
+# execs the unambiguous, always-correctly-formatted python binary, so this
+# file's own line endings/shebang/permission bits can never cause an
+# "exec format error" — the class of bug a bash entrypoint is exposed to.
+CMD ["python", "/app/entrypoint.py"]
